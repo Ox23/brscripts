@@ -18,33 +18,47 @@ export async function main(ns) {
         return;
     }
     
+    // Get the RAM required by autoHack.js from home (assuming it's the same everywhere)
+    const scriptName = "autoHack.js";
+    const scriptRam = ns.getScriptRam(scriptName, "home");
+    
     ns.tprint(`INFO: Attempting to deploy ${scriptName} on ${servers.length} servers.`);
     
     // Process each server in the array sequentially
     for (const server of servers) {
         // Optionally skip home if you don't want to run autoHack on home
         if (server === "home") {
+            ns.tprint(`Skipping home.`);
             continue;
         }
-                
-        // Copy autoHack.js to the target server
-        const copySuccess = await ns.scp(scriptName, "home", server);
-        if (!copySuccess) {
-            ns.tprint(`ERROR: Failed to copy ${scriptName} to ${server}. Skipping.`);
+        
+        ns.tprint(`\nChecking server: ${server}`);
+        
+        // Check if we have root access
+        if (!ns.hasRootAccess(server)) {
+            ns.tprint(`ERROR: No root access on ${server}. Skipping.`);
             continue;
         }
-        ns.tprint(`SUCCESS: Copied ${scriptName} to ${server}.`);
         
-        
-        // Execute autoHack.js on the target server, passing the server name as an argument
-        const pid = ns.exec(scriptName, server, 1, server);
-        if (pid === 0) {
-            ns.tprint(`ERROR: Failed to execute ${scriptName} on ${server}.`);
+        // Check if autoHack.js is already present on the target server.
+        if (ns.fileExists(scriptName, server)) {
+            ns.tprint(`${scriptName} already exists on ${server}, skipping copy.`);
         } else {
-            ns.tprint(`SUCCESS: Executed ${scriptName} on ${server} (PID: ${pid}).`);
+            const copySuccess = ns.scp(scriptName, server, "home");
+            if (!copySuccess) {
+                ns.tprint(`ERROR: Failed to copy ${scriptName} to ${server}. Skipping.`);
+                continue;
+            }
+            ns.tprint(`SUCCESS: Copied ${scriptName} to ${server}.`);
+
+            // Execute autoHack.js on the target server, passing the server name as an argument
+            const pid = ns.exec(scriptName, server, 1, server);
+            if (pid === 0) {
+                ns.tprint(`ERROR: Failed to execute ${scriptName} on ${server}.`);
+            } else {
+                ns.tprint(`SUCCESS: Executed ${scriptName} on ${server} (PID: ${pid}).`);
+            }
         }
-        
-        // Sleep briefly before moving on to the next server to allow the game to breathe
         await ns.sleep(250);
     }
     
